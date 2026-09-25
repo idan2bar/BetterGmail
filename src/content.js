@@ -201,11 +201,36 @@ function renderContacts(panel, contacts) {
   panel.list.setAttribute('role', 'listbox');
 }
 
-function setupSelection(panel, rerender) {
+/** Parses an address header ("Name <a@b.c>, d@e.f") into [{ address, name }]. */
+function parseAddresses(header) {
+  const out = [];
+  const re = /(?:"([^"]*)"|([^",<]*?))\s*<([^<>\s]+@[^<>\s]+)>|([^\s,<>"]+@[^\s,<>"]+)/g;
+  for (const m of header.matchAll(re)) {
+    const address = (m[3] || m[4]).toLowerCase();
+    out.push({ address, name: (m[1] || m[2] || '').trim() });
+  }
+  return out;
+}
+
+/** Shows a status line (e.g. an error) above the cards; empty text hides it. */
+function showStatus(panel, text) {
+  let el = panel.querySelector('[data-status]');
+  if (!el) {
+    el = document.createElement('div');
+    el.dataset.status = '';
+    Object.assign(el.style, { color: GRAY, fontSize: '12px', padding: '8px 12px' });
+    panel.insertBefore(el, panel.list);
+  }
+  el.textContent = text;
+  el.hidden = !text;
+}
+
+function setupSelection(panel, rerender, onSelect) {
   const toggle = (card) => {
     const address = card.dataset.address;
     selectedAddress = selectedAddress === address ? null : address;
     rerender();
+    onSelect(selectedAddress);
     panel.dispatchEvent(new CustomEvent('bettergmail:contactselect', { detail: { address: selectedAddress } }));
   };
   panel.addEventListener('click', (e) => {
@@ -253,66 +278,73 @@ async function main() {
     mount();
   });
 
-  // A thread row gives us an element inside the mail list.
+  const myAddress = sdk.User.getEmailAddress().toLowerCase();
+
+  // Address -> { address, name, subject }, in order of most recent mail. Pages are
+  // fetched newest-first, so the first time an address is seen is its latest mail.
+  const contacts = new Map();
+  let nextPageToken = undefined; // undefined: nothing loaded yet, null: no more pages
+  let loading = false;
+
+  const askBackground = (message) =>
+    new Promise((resolve, reject) =>
+      chrome.runtime.sendMessage(message, (res) => {
+        if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+        else if (!res?.ok) reject(new Error(res?.error || 'No response'));
+        else resolve(res.data);
+      }),
+    );
+
+  function addMessages(messages) {
+    for (const { subject, from, to, cc } of messages) {
+      for (const { address, name } of parseAddresses([from, to, cc].join(','))) {
+        if (address === myAddress || contacts.has(address)) continue;
+        contacts.set(address, { address, name, subject: subject || '(no subject)' });
+      }
+    }
+  }
+
+  function refresh() {
+    const panel = document.getElementById(PANEL_ID);
+    if (panel) renderContacts(panel, [...contacts.values()]);
+  }
+
+  /** Loads the next batch, and keeps going while the list doesn't fill the panel. */
+  async function loadMore() {
+    const panel = document.getElementById(PANEL_ID);
+    if (!panel || loading || nextPageToken === null) return;
+    loading = true;
+    try {
+      const page = await askBackground({ type: 'bettergmail:listInbox', pageToken: nextPageToken });
+      nextPageToken = page.nextPageToken;
+      addMessages(page.messages);
+      showStatus(panel, '');
+      refresh();
+    } catch (err) {
+      console.error('[BetterGmail]', err);
+      showStatus(panel, `Couldn't load contacts: ${err.message}`);
+      loading = false;
+      return;
+    }
+    loading = false;
+    const list = panel.list;
+    if (nextPageToken !== null && list.scrollHeight <= list.clientHeight + 40) loadMore();
+  }
+
+  function onSelect(address) {
+    // A real Gmail search over the whole mailbox; deselecting returns to the inbox.
+    if (address) {
+      const query = `in:inbox (from:${address} OR to:${address} OR cc:${address})`;
+      sdk.Router.goto(sdk.Router.NativeRouteIDs.SEARCH, { query, page: '1' });
+    } else {
+      sdk.Router.goto(sdk.Router.NativeRouteIDs.INBOX);
+    }
+  }
+
+  // Only used to find an anchor element inside the mail list for mounting.
   sdk.Lists.registerThreadRowViewHandler((row) => {
     listEl = row.getElement();
     mount();
-  });
-
-  const myAddress = sdk.User.getEmailAddress().toLowerCase();
-
-  // Thread rows currently rendered by Gmail -> what we read from them.
-  const rows = new Map();
-  let refreshQueued = false;
-
-  function refresh() {
-    refreshQueued = false;
-    const panel = document.getElementById(PANEL_ID);
-    if (!panel) return;
-    // Gmail lists newest mail first, so document order is recency order.
-    const ordered = [...rows.entries()].sort(([a], [b]) =>
-      a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1,
-    );
-    const contacts = new Map();
-    for (const [, { contacts: list, subject }] of ordered) {
-      for (const { emailAddress, name } of list) {
-        const address = emailAddress.toLowerCase();
-        if (address === myAddress || contacts.has(address)) continue;
-        contacts.set(address, { address, name, subject });
-      }
-    }
-    renderContacts(panel, [...contacts.values()]);
-    applyFilter();
-  }
-
-  // Hide the rows that don't involve the selected address (all shown when none).
-  function applyFilter() {
-    for (const [el, { addresses }] of rows) {
-      el.style.display = !selectedAddress || addresses.has(selectedAddress) ? '' : 'none';
-    }
-  }
-
-  function queueRefresh() {
-    if (refreshQueued) return;
-    refreshQueued = true;
-    requestAnimationFrame(refresh);
-  }
-
-  // Each row exposes its senders/recipients and subject through the SDK.
-  sdk.Lists.registerThreadRowViewHandler((row) => {
-    const el = row.getElement();
-    const read = () => {
-      const contacts = row.getContacts();
-      const addresses = new Set(contacts.map((c) => c.emailAddress.toLowerCase()));
-      rows.set(el, { contacts, addresses, subject: row.getSubject() });
-      queueRefresh();
-    };
-    read();
-    row.on('destroy', () => {
-      el.style.display = '';
-      rows.delete(el);
-      queueRefresh();
-    });
   });
 
   function mount() {
@@ -328,8 +360,13 @@ async function main() {
     const panel = createPanel();
     container.insertBefore(panel, mainArea);
     keepClearOfMenu(panel, childContaining(container, navEl));
-    setupSelection(panel, refresh);
+    setupSelection(panel, refresh, onSelect);
+    panel.list.addEventListener('scroll', () => {
+      const l = panel.list;
+      if (l.scrollTop + l.clientHeight >= l.scrollHeight - 80) loadMore();
+    });
     refresh();
+    loadMore();
   }
 }
 

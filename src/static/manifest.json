@@ -7,14 +7,32 @@
     "default_popup": "main.html",
     "default_icon": "icon.png"
   },
-  "permissions": ["scripting"],
-  "host_permissions": ["https://mail.google.com/"],
-  "background": { "service_worker": "background.js" },
+  "permissions": [
+    "scripting",
+    "identity"
+  ],
+  "host_permissions": [
+    "https://mail.google.com/",
+    "https://gmail.googleapis.com/"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
-      "matches": ["https://mail.google.com/*"],
-      "js": ["content.js"],
+      "matches": [
+        "https://mail.google.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_end"
     }
-  ]
+  ],
+  "oauth2": {
+    "client_id": "PLACEHOLDER_CLIENT_ID.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/gmail.metadata"
+    ]
+  }
 }
