@@ -1,0 +1,21 @@
+{
+  "name": "bettergmail",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Chrome extension that improves the Gmail UI (client-only, built on InboxSDK)",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/idan2bar/BetterGmail.git"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "@inboxsdk/core": "^2.2.27"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

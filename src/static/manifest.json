@@ -1,0 +1,20 @@
+{
+  "name": "Better Gmail",
+  "description": "Improves your Gmail experience",
+  "version": "1.0",
+  "manifest_version": 3,
+  "action": {
+    "default_popup": "main.html",
+    "default_icon": "icon.png"
+  },
+  "permissions": ["scripting"],
+  "host_permissions": ["https://mail.google.com/"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["https://mail.google.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ]
+}
