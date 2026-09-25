@@ -39,8 +39,94 @@ function createPanel() {
     overflow: 'auto',
     font: '14px/1.4 "Google Sans", Roboto, Arial, sans-serif',
   });
-  panel.textContent = 'Better Gmail';
   return panel;
+}
+
+// --- Contact list -----------------------------------------------------------
+
+const GRAY = '#5f6368';
+const USER_ICON =
+  '<svg viewBox="0 0 24 24" width="22" height="22" fill="#fff" aria-hidden="true">' +
+  '<path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-3.3 0-8 1.7-8 5v1h16v-1c0-3.3-4.7-5-8-5z"/></svg>';
+
+let selectedAddress = null;
+
+function createCard({ address, name, subject }) {
+  const card = document.createElement('div');
+  card.dataset.address = address;
+  card.setAttribute('role', 'option');
+  card.tabIndex = 0;
+  const selected = address === selectedAddress;
+  card.setAttribute('aria-selected', String(selected));
+  Object.assign(card.style, {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '8px',
+    borderRadius: '12px',
+    cursor: 'pointer',
+    background: selected ? 'rgba(26,115,232,0.16)' : 'transparent',
+  });
+
+  const avatar = document.createElement('div');
+  Object.assign(avatar.style, {
+    flex: '0 0 36px',
+    width: '36px',
+    height: '36px',
+    borderRadius: '50%',
+    background: '#9aa0a6',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  });
+  avatar.innerHTML = USER_ICON;
+
+  const text = document.createElement('div');
+  Object.assign(text.style, { minWidth: 0, flex: '1 1 auto' });
+  const nameEl = document.createElement('div');
+  nameEl.textContent = name || address;
+  nameEl.title = address;
+  const subjectEl = document.createElement('div');
+  subjectEl.textContent = subject;
+  Object.assign(subjectEl.style, { color: GRAY, fontSize: '12px' });
+  for (const el of [nameEl, subjectEl]) {
+    Object.assign(el.style, { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' });
+  }
+  nameEl.style.fontWeight = '500';
+  text.append(nameEl, subjectEl);
+
+  card.append(avatar, text);
+  return card;
+}
+
+/**
+ * Renders one card per address, in the order given (most recent mail first).
+ * Cards are selectable; selection is kept in `selectedAddress` and announced
+ * with a `bettergmail:contactselect` event on the panel for later filtering.
+ */
+function renderContacts(panel, contacts) {
+  panel.replaceChildren(...contacts.map(createCard));
+  panel.setAttribute('role', 'listbox');
+}
+
+function setupSelection(panel, rerender) {
+  const toggle = (card) => {
+    const address = card.dataset.address;
+    selectedAddress = selectedAddress === address ? null : address;
+    rerender();
+    panel.dispatchEvent(new CustomEvent('bettergmail:contactselect', { detail: { address: selectedAddress } }));
+  };
+  panel.addEventListener('click', (e) => {
+    const card = e.target.closest('[data-address]');
+    if (card) toggle(card);
+  });
+  panel.addEventListener('keydown', (e) => {
+    const card = e.target.closest?.('[data-address]');
+    if (card && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      toggle(card);
+    }
+  });
 }
 
 /**
@@ -81,6 +167,51 @@ async function main() {
     mount();
   });
 
+  const myAddress = sdk.User.getEmailAddress().toLowerCase();
+
+  // Thread rows currently rendered by Gmail -> what we read from them.
+  const rows = new Map();
+  let refreshQueued = false;
+
+  function refresh() {
+    refreshQueued = false;
+    const panel = document.getElementById(PANEL_ID);
+    if (!panel) return;
+    // Gmail lists newest mail first, so document order is recency order.
+    const ordered = [...rows.entries()].sort(([a], [b]) =>
+      a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1,
+    );
+    const contacts = new Map();
+    for (const [, { contacts: list, subject }] of ordered) {
+      for (const { emailAddress, name } of list) {
+        const address = emailAddress.toLowerCase();
+        if (address === myAddress || contacts.has(address)) continue;
+        contacts.set(address, { address, name, subject });
+      }
+    }
+    renderContacts(panel, [...contacts.values()]);
+  }
+
+  function queueRefresh() {
+    if (refreshQueued) return;
+    refreshQueued = true;
+    requestAnimationFrame(refresh);
+  }
+
+  // Each row exposes its senders/recipients and subject through the SDK.
+  sdk.Lists.registerThreadRowViewHandler((row) => {
+    const el = row.getElement();
+    const read = () => {
+      rows.set(el, { contacts: row.getContacts(), subject: row.getSubject() });
+      queueRefresh();
+    };
+    read();
+    row.on('destroy', () => {
+      rows.delete(el);
+      queueRefresh();
+    });
+  });
+
   function mount() {
     if (!navEl || !listEl || !navEl.isConnected || !listEl.isConnected) return;
     if (document.getElementById(PANEL_ID)) return;
@@ -94,6 +225,8 @@ async function main() {
     const panel = createPanel();
     container.insertBefore(panel, mainArea);
     keepClearOfMenu(panel, childContaining(container, navEl));
+    setupSelection(panel, refresh);
+    refresh();
   }
 }
 
