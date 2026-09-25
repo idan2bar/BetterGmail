@@ -39,3 +39,4 @@ InboxSDK needs an app id: replace `APP_ID` in `src/content.js` with one register
 
 - **Commit messages:** concise, clear, one-line description of what changed. No `Co-Authored-By` or other Claude attribution lines.
 - **Always build after changes:** after any change that requires `npm run build` to take effect (anything under `src/`, `build.mjs`, or dependencies), run it yourself; don't leave it for the user.
+- **Never push:** do not run `git push` (or otherwise publish commits to a remote). Committing locally is fine; pushing is left to the user.
