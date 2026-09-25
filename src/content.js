@@ -282,6 +282,14 @@ async function main() {
       }
     }
     renderContacts(panel, [...contacts.values()]);
+    applyFilter();
+  }
+
+  // Hide the rows that don't involve the selected address (all shown when none).
+  function applyFilter() {
+    for (const [el, { addresses }] of rows) {
+      el.style.display = !selectedAddress || addresses.has(selectedAddress) ? '' : 'none';
+    }
   }
 
   function queueRefresh() {
@@ -294,11 +302,14 @@ async function main() {
   sdk.Lists.registerThreadRowViewHandler((row) => {
     const el = row.getElement();
     const read = () => {
-      rows.set(el, { contacts: row.getContacts(), subject: row.getSubject() });
+      const contacts = row.getContacts();
+      const addresses = new Set(contacts.map((c) => c.emailAddress.toLowerCase()));
+      rows.set(el, { contacts, addresses, subject: row.getSubject() });
       queueRefresh();
     };
     read();
     row.on('destroy', () => {
+      el.style.display = '';
       rows.delete(el);
       queueRefresh();
     });
