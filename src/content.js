@@ -23,22 +23,114 @@ function childContaining(parent, el) {
   return node;
 }
 
+const WIDTH_KEY = 'bettergmail:panelWidth';
+const MIN_WIDTH = 160;
+const MAX_WIDTH = 500;
+const DEFAULT_WIDTH = 220;
+
+const clampWidth = (w) => Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, Math.round(w)));
+
+function loadWidth() {
+  try {
+    const w = parseInt(localStorage.getItem(WIDTH_KEY), 10);
+    if (Number.isFinite(w)) return clampWidth(w);
+  } catch {}
+  return DEFAULT_WIDTH;
+}
+
+function saveWidth(w) {
+  try {
+    localStorage.setItem(WIDTH_KEY, String(w));
+  } catch {}
+}
+
+function setWidth(panel, w) {
+  panel.style.flexBasis = `${w}px`;
+  panel.style.width = `${w}px`;
+}
+
+/**
+ * The right-edge drag handle. Pointer capture keeps the drag alive outside the
+ * handle, and user-select is disabled on the page while dragging.
+ */
+function createResizeHandle(panel) {
+  const handle = document.createElement('div');
+  Object.assign(handle.style, {
+    position: 'absolute',
+    top: '0',
+    right: '0',
+    bottom: '0',
+    width: '6px',
+    cursor: 'col-resize',
+    touchAction: 'none',
+    userSelect: 'none',
+    zIndex: '1',
+  });
+  let startX = 0;
+  let startWidth = 0;
+  let prevUserSelect = '';
+  handle.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    handle.setPointerCapture(e.pointerId);
+    startX = e.clientX;
+    startWidth = panel.getBoundingClientRect().width;
+    prevUserSelect = document.body.style.userSelect;
+    document.body.style.userSelect = 'none';
+    handle.style.background = 'rgba(26,115,232,0.35)';
+  });
+  handle.addEventListener('pointermove', (e) => {
+    if (!handle.hasPointerCapture(e.pointerId)) return;
+    setWidth(panel, clampWidth(startWidth + e.clientX - startX));
+  });
+  const end = (e) => {
+    if (!handle.hasPointerCapture(e.pointerId)) return;
+    handle.releasePointerCapture(e.pointerId);
+    document.body.style.userSelect = prevUserSelect;
+    handle.style.background = '';
+    saveWidth(clampWidth(panel.getBoundingClientRect().width));
+  };
+  handle.addEventListener('pointerup', end);
+  handle.addEventListener('pointercancel', end);
+  return handle;
+}
+
+/**
+ * The panel is a non-scrolling flex-column wrapper holding a scrollable list
+ * (`panel.list`, which renderContacts fills) and the resize handle.
+ */
 function createPanel() {
   const panel = document.createElement('div');
   panel.id = PANEL_ID;
+  const width = loadWidth();
   Object.assign(panel.style, {
     alignSelf: 'stretch', // fill the available height of the flex row
-    flex: '0 0 220px',
-    width: '220px',
+    flex: `0 0 ${width}px`,
+    width: `${width}px`,
+    position: 'relative',
+    display: 'flex',
+    flexDirection: 'column',
+    minHeight: '0',
+    contain: 'size', // its content never contributes to the row's height
     boxSizing: 'border-box',
     margin: '0 8px 0 0',
-    padding: '12px',
     borderRadius: '16px',
     background: 'rgba(255,255,255,0.6)',
     border: '1px solid rgba(0,0,0,0.08)',
-    overflow: 'auto',
+    overflow: 'hidden',
     font: '14px/1.4 "Google Sans", Roboto, Arial, sans-serif',
   });
+
+  const list = document.createElement('div');
+  Object.assign(list.style, {
+    flex: '1 1 auto',
+    minHeight: '0',
+    overflowY: 'auto',
+    overflowX: 'hidden',
+    padding: '12px',
+  });
+  panel.list = list;
+  panel.append(list, createResizeHandle(panel));
   return panel;
 }
 
@@ -105,8 +197,8 @@ function createCard({ address, name, subject }) {
  * with a `bettergmail:contactselect` event on the panel for later filtering.
  */
 function renderContacts(panel, contacts) {
-  panel.replaceChildren(...contacts.map(createCard));
-  panel.setAttribute('role', 'listbox');
+  panel.list.replaceChildren(...contacts.map(createCard));
+  panel.list.setAttribute('role', 'listbox');
 }
 
 function setupSelection(panel, rerender) {
