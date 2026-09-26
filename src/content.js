@@ -26,7 +26,7 @@ function childContaining(parent, el) {
 const WIDTH_KEY = 'chatmail:panelWidth';
 const MIN_WIDTH = 160;
 const MAX_WIDTH = 500;
-const DEFAULT_WIDTH = 220;
+const DEFAULT_WIDTH = 300;
 
 const clampWidth = (w) => Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, Math.round(w)));
 
@@ -96,6 +96,28 @@ function createResizeHandle(panel) {
 }
 
 /**
+ * Makes the panel end at the same bottom edge as the main mail area, whatever
+ * gap Gmail leaves below it inside the shared row.
+ */
+function alignBottom(panel, container, mainArea, listEl) {
+  // Gmail's white card sits inside the main area; take the outermost ancestor
+  // of the list that stops short of the row's bottom edge.
+  const chain = [];
+  for (let n = listEl; n && n !== container; n = n.parentElement) chain.unshift(n);
+  const sync = () => {
+    const bottom = container.getBoundingClientRect().bottom;
+    const card = chain.find((n) => bottom - n.getBoundingClientRect().bottom > 1) || mainArea;
+    const gap = bottom - card.getBoundingClientRect().bottom;
+    panel.style.marginBottom = `${Math.max(0, Math.round(gap))}px`;
+  };
+  const ro = new ResizeObserver(sync);
+  ro.observe(container);
+  chain.forEach((n) => ro.observe(n));
+  window.addEventListener('resize', sync);
+  sync();
+}
+
+/**
  * The panel is a non-scrolling flex-column wrapper holding a scrollable list
  * (`panel.list`, which renderContacts fills) and the resize handle.
  */
@@ -116,7 +138,6 @@ function createPanel() {
     margin: '0 8px 0 0',
     borderRadius: '16px',
     background: 'rgba(255,255,255,0.6)',
-    border: '1px solid rgba(0,0,0,0.08)',
     overflow: 'hidden',
     font: '14px/1.4 "Google Sans", Roboto, Arial, sans-serif',
   });
@@ -127,8 +148,12 @@ function createPanel() {
     minHeight: '0',
     overflowY: 'auto',
     overflowX: 'hidden',
-    padding: '12px',
+    scrollbarWidth: 'none',
+    padding: '4px',
   });
+  const hideBar = document.createElement('style');
+  hideBar.textContent = `#${PANEL_ID} > div::-webkit-scrollbar { display: none; }`;
+  panel.append(hideBar);
   panel.list = list;
   panel.append(list, createResizeHandle(panel));
   return panel;
@@ -360,6 +385,7 @@ async function main() {
     const panel = createPanel();
     container.insertBefore(panel, mainArea);
     keepClearOfMenu(panel, childContaining(container, navEl));
+    alignBottom(panel, container, mainArea, listEl);
     setupSelection(panel, refresh, onSelect);
     panel.list.addEventListener('scroll', () => {
       const l = panel.list;
