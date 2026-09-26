@@ -118,6 +118,31 @@ function alignBottom(panel, container, mainArea, listEl) {
 }
 
 /**
+ * When the menu is collapsed Gmail overlays it on the content row and reserves its width as
+ * empty space between the panel and the main area, leaving the panel under the menu icons.
+ * Move that space to the panel's left: measure the gap the panel's natural position leaves
+ * before the main area, then shift the panel right by it and shrink its right margin by the
+ * same amount so the main area doesn't move.
+ */
+function shiftClearOfMenu(panel, container, mainArea) {
+  const GAP = 8; // the panel's normal right margin
+  const sync = () => {
+    panel.style.marginLeft = '0px';
+    panel.style.marginRight = `${GAP}px`;
+    const { left, width } = panel.getBoundingClientRect();
+    const shift = Math.max(0, Math.round(mainArea.getBoundingClientRect().left - (left + width + GAP)));
+    panel.style.marginLeft = `${shift}px`;
+    panel.style.marginRight = `${GAP - shift}px`;
+  };
+  const ro = new ResizeObserver(sync);
+  ro.observe(container);
+  ro.observe(mainArea);
+  container.addEventListener('transitionend', sync);
+  window.addEventListener('resize', sync);
+  sync();
+}
+
+/**
  * The panel is a non-scrolling flex-column wrapper holding a scrollable list
  * (`panel.list`, which renderContacts fills) and the resize handle.
  */
@@ -271,24 +296,6 @@ function setupSelection(panel, rerender, onSelect) {
   });
 }
 
-/**
- * When the menu is collapsed Gmail lays it out over the content area instead of
- * beside it, so the panel would sit underneath the menu icons. Measure where the
- * menu column ends and push the panel right by however much they overlap.
- */
-function keepClearOfMenu(panel, menuColumn) {
-  const update = () => {
-    panel.style.marginLeft = '0px';
-    const overlap = menuColumn.getBoundingClientRect().right - panel.getBoundingClientRect().left;
-    panel.style.marginLeft = `${Math.max(0, Math.ceil(overlap))}px`;
-  };
-  const observer = new ResizeObserver(update);
-  observer.observe(menuColumn);
-  observer.observe(document.body);
-  menuColumn.addEventListener('transitionend', update);
-  update();
-}
-
 async function main() {
   const sdk = await InboxSDK.load(2, APP_ID);
 
@@ -383,8 +390,13 @@ async function main() {
     if (!mainArea) return;
 
     const panel = createPanel();
-    container.insertBefore(panel, mainArea);
-    keepClearOfMenu(panel, childContaining(container, navEl));
+    // InboxSDK expects the menu's next sibling to be the main area, so keep that DOM order
+    // and place the panel between them visually with flex `order`: the panel and everything
+    // before the main area sort first (in DOM order); the main area and what follows keep order 0.
+    panel.style.order = '-1';
+    for (let n = mainArea.previousElementSibling; n; n = n.previousElementSibling) n.style.order = '-1';
+    mainArea.after(panel);
+    shiftClearOfMenu(panel, container, mainArea);
     alignBottom(panel, container, mainArea, listEl);
     setupSelection(panel, refresh, onSelect);
     panel.list.addEventListener('scroll', () => {

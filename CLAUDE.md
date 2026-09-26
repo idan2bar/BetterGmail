@@ -50,7 +50,7 @@ InboxSDK needs an app id: replace `APP_ID` in `src/content.js` with one register
 ## How the code fits together
 
 **Content script (`src/content.js`)** – top-level helpers plus `main()`:
-- Pure/DOM helpers: panel creation (`createPanel`, `createResizeHandle`, `alignBottom`, `keepClearOfMenu`), cards
+- Pure/DOM helpers: panel creation (`createPanel`, `createResizeHandle`, `alignBottom`, `shiftClearOfMenu`), cards
   (`createCard`, `renderContacts`, `showStatus`, `setupSelection`), `parseAddresses` (address-header parser).
 - `main()` loads InboxSDK, then wires state and behaviour: `contacts` (Map address -> {address, name, subject}, insertion
   order = recency because pages arrive newest-first), `loadMore()` (paging), `onSelect()` (search/inbox navigation),
