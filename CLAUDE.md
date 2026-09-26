@@ -1,4 +1,4 @@
-# BetterGmail
+# Chat Mail
 
 Chrome extension (Manifest V3) that improves the Gmail UI.
 

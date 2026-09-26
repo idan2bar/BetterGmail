@@ -23,7 +23,7 @@ function childContaining(parent, el) {
   return node;
 }
 
-const WIDTH_KEY = 'bettergmail:panelWidth';
+const WIDTH_KEY = 'chatmail:panelWidth';
 const MIN_WIDTH = 160;
 const MAX_WIDTH = 500;
 const DEFAULT_WIDTH = 220;
@@ -194,7 +194,7 @@ function createCard({ address, name, subject }) {
 /**
  * Renders one card per address, in the order given (most recent mail first).
  * Cards are selectable; selection is kept in `selectedAddress` and announced
- * with a `bettergmail:contactselect` event on the panel for later filtering.
+ * with a `chatmail:contactselect` event on the panel for later filtering.
  */
 function renderContacts(panel, contacts) {
   panel.list.replaceChildren(...contacts.map(createCard));
@@ -231,7 +231,7 @@ function setupSelection(panel, rerender, onSelect) {
     selectedAddress = selectedAddress === address ? null : address;
     rerender();
     onSelect(selectedAddress);
-    panel.dispatchEvent(new CustomEvent('bettergmail:contactselect', { detail: { address: selectedAddress } }));
+    panel.dispatchEvent(new CustomEvent('chatmail:contactselect', { detail: { address: selectedAddress } }));
   };
   panel.addEventListener('click', (e) => {
     const card = e.target.closest('[data-address]');
@@ -273,7 +273,7 @@ async function main() {
   let listEl = null;
 
   // A nav item gives us a stable element inside the main (left) menu.
-  sdk.NavMenu.addNavItem({ name: 'Better Gmail' }).getElement().then((el) => {
+  sdk.NavMenu.addNavItem({ name: 'Chat Mail' }).getElement().then((el) => {
     navEl = el;
     mount();
   });
@@ -315,13 +315,13 @@ async function main() {
     if (!panel || loading || nextPageToken === null) return;
     loading = true;
     try {
-      const page = await askBackground({ type: 'bettergmail:listInbox', pageToken: nextPageToken });
+      const page = await askBackground({ type: 'chatmail:listInbox', pageToken: nextPageToken });
       nextPageToken = page.nextPageToken;
       addMessages(page.messages);
       showStatus(panel, '');
       refresh();
     } catch (err) {
-      console.error('[BetterGmail]', err);
+      console.error('[ChatMail]', err);
       showStatus(panel, `Couldn't load contacts: ${err.message}`);
       loading = false;
       return;
@@ -370,4 +370,4 @@ async function main() {
   }
 }
 
-main().catch((err) => console.error('[BetterGmail]', err));
+main().catch((err) => console.error('[ChatMail]', err));

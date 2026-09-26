@@ -54,7 +54,7 @@ async function listInboxPage(pageToken) {
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg?.type !== 'bettergmail:listInbox') return;
+  if (msg?.type !== 'chatmail:listInbox') return;
   listInboxPage(msg.pageToken).then(
     (data) => sendResponse({ ok: true, data }),
     (err) => sendResponse({ ok: false, error: String(err.message || err) }),

@@ -1,5 +1,5 @@
 {
-  "name": "bettergmail",
+  "name": "chatmail",
   "version": "1.0.0",
   "private": true,
   "description": "Chrome extension that improves the Gmail UI (client-only, built on InboxSDK)",
