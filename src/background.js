@@ -18,7 +18,11 @@ async function gmailGet(path, params) {
       await chrome.identity.removeCachedAuthToken({ token }); // stale token: refresh once
       continue;
     }
-    if (!res.ok) throw new Error(`Gmail API ${res.status}`);
+    if (!res.ok) {
+      // Google's error body says why (API disabled, missing scope, not a test user, ...).
+      const detail = await res.json().then((j) => j.error?.message, () => '');
+      throw new Error(`Gmail API ${res.status}${detail ? `: ${detail}` : ''}`);
+    }
     return res.json();
   }
 }
