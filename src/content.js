@@ -162,7 +162,7 @@ function createPanel() {
     boxSizing: 'border-box',
     margin: '0 8px 0 0',
     borderRadius: '16px',
-    background: 'rgba(255,255,255,0.6)',
+    background: '#fff',
     overflow: 'hidden',
     font: '14px/1.4 "Google Sans", Roboto, Arial, sans-serif',
   });
