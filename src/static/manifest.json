@@ -3,6 +3,7 @@
   "description": "Improves your Gmail experience",
   "version": "1.0",
   "manifest_version": 3,
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwyYaLUjmjHwJmTG9Sk+2BNU/jfw05RBNdn8QLNEcDFFgyVL0QFH3Jcew2N+XCjEPNsnkd8nongmOVj+Fs1TQIDh87PuS2XTHyWau3o2TVJnMobCHsUjygA9ZDLNMJSCbLTJVDZrjalb6FUu5bCZoyku5kO88zVUgdbv1fpIqou+ndjzf//ftArweompOBkrqj41qf+5VgDr1tZ8egKUHvHbOAVPNlRvi28aDikUasBxp+CfW8fXF9R23Ao8S4AYbhEwsEESTNSYeNobY+fQdialJ9Ph/Tf1jLB4lK42zTlNJ0hsdeN3F0yjxwHjgq2aOWcQc1K52vhM25j0Ji+JSbwIDAQAB",
   "action": {
     "default_popup": "main.html",
     "default_icon": "icon.png"
@@ -30,7 +31,7 @@
     }
   ],
   "oauth2": {
-    "client_id": "PLACEHOLDER_CLIENT_ID.apps.googleusercontent.com",
+    "client_id": "165687420796-fjgln7nqk4u9ctev0smou6nrppdmr48k.apps.googleusercontent.com",
     "scopes": [
       "https://www.googleapis.com/auth/gmail.metadata"
     ]
