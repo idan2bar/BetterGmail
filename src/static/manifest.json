@@ -33,7 +33,7 @@
   "oauth2": {
     "client_id": "165687420796-fjgln7nqk4u9ctev0smou6nrppdmr48k.apps.googleusercontent.com",
     "scopes": [
-      "https://www.googleapis.com/auth/gmail.metadata"
+      "https://www.googleapis.com/auth/gmail.readonly"
     ]
   }
 }

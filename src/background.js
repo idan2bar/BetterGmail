@@ -23,7 +23,10 @@ async function gmailGet(path, params) {
       const detail = await res.json().then((j) => j.error?.message, () => '');
       throw new Error(`Gmail API ${res.status}${detail ? `: ${detail}` : ''}`);
     }
-    return res.json();
+    // A `fields`-filtered response with nothing left in it (e.g. a search with no hits)
+    // can come back with an empty body, which res.json() would reject.
+    const text = await res.text();
+    return text ? JSON.parse(text) : {};
   }
 }
 
@@ -53,9 +56,31 @@ async function listInboxPage(pageToken) {
   };
 }
 
+const UNREAD_CAP = 100; // list at most this many ids; the UI shows 99+ beyond 99
+
+/**
+ * Exact unread inbox count for one address, capped at UNREAD_CAP. A single ids-only
+ * list request: a full page of ids means "cap or more".
+ */
+async function countUnread(address) {
+  const q = `in:inbox is:unread (from:${address} OR to:${address} OR cc:${address})`;
+  const params = new URLSearchParams({ q, maxResults: String(UNREAD_CAP), fields: 'messages/id' });
+  const { messages = [] } = await gmailGet('messages', params);
+  return messages.length;
+}
+
+/** Counts for several addresses -> { address: count }. */
+async function countUnreadMany(addresses) {
+  const counts = await Promise.all(addresses.map(countUnread));
+  return Object.fromEntries(addresses.map((a, i) => [a, counts[i]]));
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg?.type !== 'chatmail:listInbox') return;
-  listInboxPage(msg.pageToken).then(
+  let work;
+  if (msg?.type === 'chatmail:listInbox') work = listInboxPage(msg.pageToken);
+  else if (msg?.type === 'chatmail:countUnread') work = countUnreadMany(msg.addresses);
+  else return;
+  work.then(
     (data) => sendResponse({ ok: true, data }),
     (err) => sendResponse({ ok: false, error: String(err.message || err) }),
   );

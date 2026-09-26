@@ -193,7 +193,7 @@ const USER_ICON =
 
 let selectedAddress = null;
 
-function createCard({ address, name, subject }) {
+function createCard({ address, name, subject, unread }) {
   const card = document.createElement('div');
   card.dataset.address = address;
   card.setAttribute('role', 'option');
@@ -201,6 +201,7 @@ function createCard({ address, name, subject }) {
   const selected = address === selectedAddress;
   card.setAttribute('aria-selected', String(selected));
   Object.assign(card.style, {
+    position: 'relative',
     display: 'flex',
     alignItems: 'center',
     gap: '10px',
@@ -238,6 +239,29 @@ function createCard({ address, name, subject }) {
   text.append(nameEl, subjectEl);
 
   card.append(avatar, text);
+
+  if (unread > 0) {
+    const badge = document.createElement('div');
+    badge.textContent = unread > 99 ? '99+' : String(unread);
+    badge.title = `${unread > 99 ? '99+' : unread} unread`;
+    Object.assign(badge.style, {
+      position: 'absolute',
+      top: '4px',
+      right: '6px',
+      minWidth: '18px',
+      height: '18px',
+      padding: '0 5px',
+      boxSizing: 'border-box',
+      borderRadius: '9px',
+      background: '#1a73e8',
+      color: '#fff',
+      fontSize: '11px',
+      fontWeight: '500',
+      lineHeight: '18px',
+      textAlign: 'center',
+    });
+    card.append(badge);
+  }
   return card;
 }
 
@@ -338,7 +362,33 @@ async function main() {
 
   function refresh() {
     const panel = document.getElementById(PANEL_ID);
-    if (panel) renderContacts(panel, [...contacts.values()]);
+    if (!panel) return;
+    renderContacts(
+      panel,
+      [...contacts.values()].map((c) => ({ ...c, unread: unreadCounts.get(c.address) || 0 })),
+    );
+  }
+
+  // Address -> exact unread inbox count (capped at 100 by the background script; the
+  // badge shows 99+). One Gmail search per address, requested as contacts get loaded.
+  const unreadCounts = new Map();
+  const unreadRequested = new Set();
+  const UNREAD_BATCH = 10;
+
+  async function loadUnreadCounts() {
+    const pending = [...contacts.keys()].filter((a) => !unreadRequested.has(a));
+    pending.forEach((a) => unreadRequested.add(a));
+    for (let i = 0; i < pending.length; i += UNREAD_BATCH) {
+      const addresses = pending.slice(i, i + UNREAD_BATCH);
+      try {
+        const counts = await askBackground({ type: 'chatmail:countUnread', addresses });
+        for (const [address, n] of Object.entries(counts)) unreadCounts.set(address, n);
+        refresh();
+      } catch (err) {
+        console.error('[ChatMail]', err);
+        addresses.forEach((a) => unreadRequested.delete(a)); // retry with the next page load
+      }
+    }
   }
 
   /** Loads the next batch, and keeps going while the list doesn't fill the panel. */
@@ -352,6 +402,7 @@ async function main() {
       addMessages(page.messages);
       showStatus(panel, '');
       refresh();
+      loadUnreadCounts();
     } catch (err) {
       console.error('[ChatMail]', err);
       showStatus(panel, `Couldn't load contacts: ${err.message}`);
